@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Message } from "@/types";
 
@@ -29,20 +29,35 @@ export function useRealtimeMessages({ contactId, onMessage }: UseRealtimeMessage
           onMessage(payload.new as Message);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[useRealtimeMessages] subscribe error:", err);
+        else console.log("[useRealtimeMessages] status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [contactId]);
+  }, [contactId]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/**
+ * Subscribes to ALL message UPDATE events and calls onUpdate(id, status).
+ * Requires the messages table to have REPLICA IDENTITY FULL in Supabase.
+ */
 export function useRealtimeMessageStatus(onUpdate: (id: string, status: string) => void) {
-  const supabase = createClient();
+  // Keep onUpdate in a ref so the channel closure never goes stale
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  });
 
   useEffect(() => {
+    const supabase = createClient();
+
     const channel = supabase
-      .channel("message-status-updates")
+      .channel("message-status-updates", {
+        config: { broadcast: { self: false } },
+      })
       .on(
         "postgres_changes",
         {
@@ -51,13 +66,20 @@ export function useRealtimeMessageStatus(onUpdate: (id: string, status: string) 
           table: "messages",
         },
         (payload) => {
-          onUpdate(payload.new.id, payload.new.status);
+          const updated = payload.new;
+          if (updated?.id && updated?.status) {
+            console.log("[useRealtimeMessageStatus] status update:", updated.id, updated.status);
+            onUpdateRef.current(updated.id, updated.status);
+          }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[useRealtimeMessageStatus] subscribe error:", err);
+        else console.log("[useRealtimeMessageStatus] channel status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, []); // Intentionally empty — stable via ref
 }

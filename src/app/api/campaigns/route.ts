@@ -6,7 +6,7 @@ import { SendCampaignPayload } from "@/types";
 export async function POST(req: NextRequest) {
   try {
     const body: SendCampaignPayload = await req.json();
-    const { campaign_name, template_name, template_language, contacts } = body;
+    const { campaign_name, template_name, template_language, contacts, headerImageUrl } = body;
 
     if (!campaign_name || !template_name || !contacts?.length) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         contacts.map((c) => ({ phone: c.phone, name: c.name ?? null, email: c.email ?? null })),
         { onConflict: "phone", ignoreDuplicates: false }
       )
-      .select("id, phone");
+      .select("id, phone, name");
 
     if (!upsertedContacts?.length) {
       throw new Error("Failed to upsert contacts");
@@ -46,12 +46,15 @@ export async function POST(req: NextRequest) {
 
     let sentCount = 0;
     let failedCount = 0;
+    const failReasons: string[] = [];
 
     for (const contact of upsertedContacts) {
       const { ok, wamid, error } = await sendWhatsAppTemplate(
         contact.phone,
         template_name,
-        template_language
+        template_language,
+        headerImageUrl,
+        contact.name ?? undefined
       );
 
       await supabase.from("campaign_logs").insert({
@@ -81,6 +84,9 @@ export async function POST(req: NextRequest) {
           .eq("id", contact.id);
       } else {
         failedCount++;
+        if (error) {
+          failReasons.push(`${contact.phone}: ${error}`);
+        }
         console.error(`Failed to send to ${contact.phone}:`, error);
       }
     }
@@ -88,14 +94,34 @@ export async function POST(req: NextRequest) {
     await supabase
       .from("campaigns")
       .update({
-        status: failedCount === contacts.length ? "failed" : "completed",
+        status: sentCount === 0 ? "failed" : failedCount === contacts.length ? "failed" : "completed",
         sent_count: sentCount,
         failed_count: failedCount,
         completed_at: new Date().toISOString(),
       })
       .eq("id", campaign.id);
 
-    return NextResponse.json({ success: true, campaign_id: campaign.id, sent: sentCount, failed: failedCount });
+    if (sentCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          campaign_id: campaign.id,
+          sent: 0,
+          failed: failedCount,
+          error: "No messages were delivered. Check template approval, recipient opt-in, and Meta credentials.",
+          details: failReasons.slice(0, 5),
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      campaign_id: campaign.id,
+      sent: sentCount,
+      failed: failedCount,
+      partialSuccess: failedCount > 0,
+    });
   } catch (err) {
     console.error("Campaign error:", err);
     return NextResponse.json(

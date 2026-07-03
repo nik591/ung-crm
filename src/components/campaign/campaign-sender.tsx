@@ -15,6 +15,7 @@ const schema = z.object({
   campaign_name: z.string().min(2, "Campaign name required"),
   template_name: z.string().min(1, "Select a template"),
   template_language: z.string().min(1),
+  headerImageUrl: z.string().trim().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -45,10 +46,10 @@ export function CampaignSender() {
       if (data.length === 0) {
         toast.warning("No approved templates found. Get a template approved in Meta Business Manager first.");
       }
-    } catch {
+    } catch (err) {
+      console.error("Templates fetch error:", err);
       toast.error("Could not load templates. Check META_WABA_ID in your env.");
-      // Fallback to hello_world
-      setTemplates([{ name: "hello_world", language: "en_US", display_name: "Hello World" }]);
+      setTemplates([]);
     } finally {
       setLoadingTemplates(false);
     }
@@ -61,25 +62,45 @@ export function CampaignSender() {
   const handleFile = (file: File) => {
     if (!file) return;
 
-    if (file.name.endsWith(".csv")) {
+    const fileName = file.name.toLowerCase();
+    const parsedContactsFromFile = (parsed: ParsedContact[]) => {
+      if (parsed.length === 0) {
+        toast.error("No valid contacts found. Ensure the file has a phone column and valid phone values.");
+      }
+      setContacts(parsed);
+    };
+
+    if (fileName.endsWith(".csv")) {
       Papa.parse(file, {
         header: true,
         complete: (result) => {
           const parsed = parseRows(result.data as Record<string, string>[]);
-          setContacts(parsed);
+          parsedContactsFromFile(parsed);
+        },
+        error: (error) => {
+          toast.error(`Failed to parse CSV: ${error.message}`);
         },
       });
-    } else {
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const data = new Uint8Array(e.target!.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
-        const parsed = parseRows(rows);
-        setContacts(parsed);
+        try {
+          const data = new Uint8Array(e.target!.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+          const parsed = parseRows(rows);
+          parsedContactsFromFile(parsed);
+        } catch (error) {
+          toast.error("Failed to parse Excel file. Ensure it is a valid XLSX/XLS spreadsheet.");
+        }
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read Excel file");
       };
       reader.readAsArrayBuffer(file);
+    } else {
+      toast.error("Unsupported file type. Please upload .xlsx, .xls, or .csv files.");
     }
   };
 
@@ -117,17 +138,25 @@ export function CampaignSender() {
           campaign_name: data.campaign_name,
           template_name: data.template_name,
           template_language: data.template_language,
+          headerImageUrl: data.headerImageUrl,
           contacts,
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Failed to send campaign");
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error ?? "Failed to send campaign");
       }
 
       setStep("success");
-      toast.success("Campaign sent successfully!");
+
+      if (result.partialSuccess) {
+        toast.warning(`Campaign sent to ${result.sent} contacts; ${result.failed} failed. Check Meta template approval and recipient opt-in status.`);
+      } else {
+        toast.success(`Campaign sent to ${result.sent} contacts.`);
+      }
+
       setTimeout(() => {
         setOpen(false);
         reset();
@@ -241,12 +270,22 @@ export function CampaignSender() {
                       {errors.template_name && <p className="text-xs text-destructive">{errors.template_name.message}</p>}
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-foreground">Header Image URL (optional)</label>
+                      <input
+                        {...register("headerImageUrl")}
+                        placeholder="https://example.com/header.jpg"
+                        className="w-full px-3 py-2.5 bg-background border border-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      {errors.headerImageUrl && <p className="text-xs text-destructive">{errors.headerImageUrl.message}</p>}
+                    </div>
+
                     {/* File Upload */}
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-foreground">Contacts File</label>
-                      <div
+                      <label
+                        htmlFor="contacts-file"
                         className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
-                        onClick={() => fileRef.current?.click()}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => {
                           e.preventDefault();
@@ -269,13 +308,18 @@ export function CampaignSender() {
                             <p className="text-xs text-muted-foreground mt-1">Columns: phone, name (optional), email (optional)</p>
                           </>
                         )}
-                      </div>
+                      </label>
                       <input
+                        id="contacts-file"
                         ref={fileRef}
                         type="file"
                         accept=".xlsx,.xls,.csv"
                         className="hidden"
-                        onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFile(file);
+                          e.target.value = "";
+                        }}
                       />
                     </div>
                   </>
@@ -292,6 +336,9 @@ export function CampaignSender() {
                         <span className="text-muted-foreground">Recipients</span>
                         <span className="font-medium text-foreground">{contacts.length}</span>
                       </div>
+                      <p className="text-xs text-muted-foreground pt-1">
+                        Recipients must have opted in to receive WhatsApp template messages.
+                      </p>
                     </div>
 
                     <div className="space-y-1.5">

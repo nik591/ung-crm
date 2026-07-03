@@ -1,21 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendWhatsAppText } from "@/services/meta";
+import { sendWhatsAppText, sendWhatsAppMedia } from "@/services/meta";
 
 export async function POST(req: NextRequest) {
   try {
-    const { contact_id, phone, message } = await req.json();
+    const { contact_id, phone, message, media_url, media_type, filename } = await req.json();
 
-    if (!contact_id || !phone || !message) {
+    if (!contact_id || !phone) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const supabase = await createAdminClient();
+    if (!message && !media_url) {
+      return NextResponse.json({ error: "Either message or media_url is required" }, { status: 400 });
+    }
 
-    const { ok, wamid, error } = await sendWhatsAppText(phone, message);
+    const supabase = await createAdminClient();
+    let ok = false;
+    let wamid = null;
+    let error = null;
+
+    if (media_url) {
+      const result = await sendWhatsAppMedia(
+        phone,
+        media_url,
+        media_type || "image",
+        message || undefined,
+        filename
+      );
+      ok = result.ok;
+      wamid = result.wamid;
+      error = result.error;
+    } else {
+      const result = await sendWhatsAppText(phone, message);
+      ok = result.ok;
+      wamid = result.wamid;
+      error = result.error;
+    }
 
     if (!ok) {
       throw new Error(error ?? "Meta API failed");
+    }
+
+    // Determine the content to save in the database
+    let contentToSave = message || "";
+    if (media_url && !contentToSave) {
+      contentToSave = `[${media_type || "image"}]`;
     }
 
     const { data: savedMessage, error: msgError } = await supabase
@@ -23,7 +52,8 @@ export async function POST(req: NextRequest) {
       .insert({
         contact_id,
         direction: "outbound",
-        content: message,
+        content: contentToSave,
+        media_url: media_url || null,
         wamid,
         status: "sent",
         sent_at: new Date().toISOString(),

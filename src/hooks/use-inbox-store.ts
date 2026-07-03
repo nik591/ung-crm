@@ -7,6 +7,7 @@ interface InboxStore {
 
   unreadCounts: Record<string, number>;
   setUnreadCount: (contactId: string, count: number) => void;
+  incrementUnread: (contactId: string) => void;
   clearUnread: (contactId: string) => void;
 
   messages: Record<string, Message[]>;
@@ -22,6 +23,13 @@ export const useInboxStore = create<InboxStore>((set) => ({
   setUnreadCount: (contactId, count) =>
     set((state) => ({
       unreadCounts: { ...state.unreadCounts, [contactId]: count },
+    })),
+  incrementUnread: (contactId) =>
+    set((state) => ({
+      unreadCounts: {
+        ...state.unreadCounts,
+        [contactId]: (state.unreadCounts[contactId] ?? 0) + 1,
+      },
     })),
   clearUnread: (contactId) =>
     set((state) => ({

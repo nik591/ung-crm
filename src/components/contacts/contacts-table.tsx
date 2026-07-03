@@ -74,7 +74,7 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
                       {contact.message_count}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">
+                  <td suppressHydrationWarning className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">
                     {formatRelativeTime(contact.last_message_at)}
                   </td>
                   <td className="px-4 py-3 text-right">
