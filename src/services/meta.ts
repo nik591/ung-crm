@@ -15,7 +15,9 @@ export async function sendWhatsAppTemplate(
   templateName: string,
   templateLanguage: string,
   headerImageUrl?: string,
-  contactName?: string
+  contactName?: string,
+  hasImageHeader?: boolean,
+  hasBodyVariables?: boolean
 ) {
   const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
   const accessToken = process.env.META_ACCESS_TOKEN;
@@ -37,24 +39,12 @@ export async function sendWhatsAppTemplate(
     };
   }
 
-  const bodyComponent = {
-    type: "body",
-    parameters: [
-      {
-        type: "text",
-        text: contactName || "Customer",
-      },
-    ],
-  };
+  const components: any[] = [];
 
-  const templatePayload: Record<string, any> = {
-    name: templateName,
-    language: { code: templateLanguage },
-    components: [bodyComponent],
-  };
-
-  if (headerImageUrl) {
-    templatePayload.components.unshift({
+  // 1. Image Header
+  const shouldSendHeader = hasImageHeader !== undefined ? hasImageHeader : !!headerImageUrl;
+  if (shouldSendHeader && headerImageUrl) {
+    components.push({
       type: "header",
       parameters: [
         {
@@ -64,6 +54,26 @@ export async function sendWhatsAppTemplate(
       ],
     });
   }
+
+  // 2. Body Component
+  const shouldSendBody = hasBodyVariables !== undefined ? hasBodyVariables : true;
+  if (shouldSendBody) {
+    components.push({
+      type: "body",
+      parameters: [
+        {
+          type: "text",
+          text: contactName || "Customer",
+        },
+      ],
+    });
+  }
+
+  const templatePayload: Record<string, any> = {
+    name: templateName,
+    language: { code: templateLanguage },
+    components,
+  };
 
   const payload = {
     messaging_product: "whatsapp",

@@ -44,6 +44,49 @@ export async function POST(req: NextRequest) {
       throw new Error("Failed to upsert contacts");
     }
 
+    // Fetch template details from Meta to check for image header & body variables
+    const wabaId = process.env.META_WABA_ID;
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    let hasImageHeader = false;
+    let hasBodyVariables = false;
+
+    if (wabaId && accessToken) {
+      try {
+        const templatesRes = await fetch(
+          `https://graph.facebook.com/v19.0/${wabaId}/message_templates?name=${encodeURIComponent(template_name)}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        if (templatesRes.ok) {
+          const templatesData = await templatesRes.json();
+          const matchingTemplate = (templatesData.data ?? []).find(
+            (t: any) =>
+              t.name === template_name &&
+              (t.language === template_language || t.language?.startsWith(template_language))
+          );
+
+          if (matchingTemplate && matchingTemplate.components) {
+            const headerComponent = matchingTemplate.components.find(
+              (c: any) => c.type === "HEADER"
+            );
+            if (headerComponent && headerComponent.format === "IMAGE") {
+              hasImageHeader = true;
+            }
+
+            const bodyComponent = matchingTemplate.components.find(
+              (c: any) => c.type === "BODY"
+            );
+            if (bodyComponent && bodyComponent.text) {
+              hasBodyVariables = /\{\{\d+\}\}/.test(bodyComponent.text);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching template metadata from Meta:", err);
+      }
+    }
+
     let sentCount = 0;
     let failedCount = 0;
     const failReasons: string[] = [];
@@ -54,7 +97,9 @@ export async function POST(req: NextRequest) {
         template_name,
         template_language,
         headerImageUrl,
-        contact.name ?? undefined
+        contact.name ?? undefined,
+        hasImageHeader,
+        hasBodyVariables
       );
 
       await supabase.from("campaign_logs").insert({
