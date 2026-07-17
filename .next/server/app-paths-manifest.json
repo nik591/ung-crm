@@ -1,0 +1,19 @@
+{
+  "/api/analytics/route": "app/api/analytics/route.js",
+  "/api/chats/route": "app/api/chats/route.js",
+  "/api/campaigns/[id]/route": "app/api/campaigns/[id]/route.js",
+  "/api/upload/route": "app/api/upload/route.js",
+  "/api/templates/route": "app/api/templates/route.js",
+  "/api/contacts/route": "app/api/contacts/route.js",
+  "/api/campaigns/route": "app/api/campaigns/route.js",
+  "/api/webhook/route": "app/api/webhook/route.js",
+  "/api/messages/route": "app/api/messages/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/auth/login/page": "app/auth/login/page.js",
+  "/dashboard/contacts/page": "app/dashboard/contacts/page.js",
+  "/dashboard/inbox/page": "app/dashboard/inbox/page.js",
+  "/dashboard/campaigns/page": "app/dashboard/campaigns/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/analytics/page": "app/dashboard/analytics/page.js"
+}
