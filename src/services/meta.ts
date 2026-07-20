@@ -14,9 +14,8 @@ export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
   templateLanguage: string,
-  headerImageUrl?: string,
+  headerVideoUrl?: string,
   contactName?: string,
-  hasImageHeader?: boolean,
   hasBodyVariables?: boolean
 ) {
   const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
@@ -41,15 +40,14 @@ export async function sendWhatsAppTemplate(
 
   const components: any[] = [];
 
-  // 1. Image Header
-  const shouldSendHeader = hasImageHeader !== undefined ? hasImageHeader : !!headerImageUrl;
-  if (shouldSendHeader && headerImageUrl) {
+  // 1. Header
+  if (headerVideoUrl) {
     components.push({
       type: "header",
       parameters: [
         {
-          type: "image",
-          image: { link: headerImageUrl },
+          type: "video",
+          video: { link: headerVideoUrl },
         },
       ],
     });

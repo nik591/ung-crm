@@ -6,7 +6,7 @@ import { SendCampaignPayload } from "@/types";
 export async function POST(req: NextRequest) {
   try {
     const body: SendCampaignPayload = await req.json();
-    const { campaign_name, template_name, template_language, contacts, headerImageUrl } = body;
+    const { campaign_name, template_name, template_language, contacts, headerVideoUrl } = body;
 
     if (!campaign_name || !template_name || !contacts?.length) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -96,9 +96,8 @@ export async function POST(req: NextRequest) {
         contact.phone,
         template_name,
         template_language,
-        headerImageUrl,
+        headerVideoUrl,
         contact.name ?? undefined,
-        hasImageHeader,
         hasBodyVariables
       );
 

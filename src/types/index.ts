@@ -94,7 +94,7 @@ export interface SendCampaignPayload {
   template_name: string;
   template_language: string;
   contacts: ParsedContact[];
-  headerImageUrl?: string;
+  headerVideoUrl?: string;
 }
 
 export interface SendReplyPayload {

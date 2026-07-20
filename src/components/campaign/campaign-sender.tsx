@@ -15,7 +15,7 @@ const schema = z.object({
   campaign_name: z.string().min(2, "Campaign name required"),
   template_name: z.string().min(1, "Select a template"),
   template_language: z.string().min(1),
-  headerImageUrl: z.string().trim().optional(),
+  headerVideoUrl: z.string().trim().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -138,7 +138,7 @@ export function CampaignSender() {
           campaign_name: data.campaign_name,
           template_name: data.template_name,
           template_language: data.template_language,
-          headerImageUrl: data.headerImageUrl,
+          headerVideoUrl: data.headerVideoUrl,
           contacts,
         }),
       });
@@ -271,13 +271,13 @@ export function CampaignSender() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-foreground">Header Image URL (optional)</label>
+                      <label className="text-sm font-medium text-foreground">Header Video URL</label>
                       <input
-                        {...register("headerImageUrl")}
-                        placeholder="https://example.com/header.jpg"
+                        {...register("headerVideoUrl")}
+                        placeholder="https://example.com/video.mp4"
                         className="w-full px-3 py-2.5 bg-background border border-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
-                      {errors.headerImageUrl && <p className="text-xs text-destructive">{errors.headerImageUrl.message}</p>}
+                      {errors.headerVideoUrl && <p className="text-xs text-destructive">{errors.headerVideoUrl.message}</p>}
                     </div>
 
                     {/* File Upload */}
