@@ -14,7 +14,7 @@ export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
   templateLanguage: string,
-  headerVideoUrl?: string,
+  headerMedia?: string | { type: "video" | "image" | "document"; url: string } | null,
   contactName?: string,
   hasBodyVariables?: boolean
 ) {
@@ -40,14 +40,26 @@ export async function sendWhatsAppTemplate(
 
   const components: any[] = [];
 
+  // Determine media object for header
+  let mediaObj: { type: "video" | "image" | "document"; url: string } | null = null;
+  if (typeof headerMedia === "string") {
+    const isVideo = /\.(mp4|mov|avi|mkv|webm|3gp)(\?.*)?$/i.test(headerMedia);
+    mediaObj = {
+      type: isVideo ? "video" : "image",
+      url: headerMedia,
+    };
+  } else if (headerMedia && headerMedia.url) {
+    mediaObj = headerMedia;
+  }
+
   // 1. Header
-  if (headerVideoUrl) {
+  if (mediaObj) {
     components.push({
       type: "header",
       parameters: [
         {
-          type: "video",
-          video: { link: headerVideoUrl },
+          type: mediaObj.type,
+          [mediaObj.type]: { link: mediaObj.url },
         },
       ],
     });

@@ -6,7 +6,7 @@ import { SendCampaignPayload } from "@/types";
 export async function POST(req: NextRequest) {
   try {
     const body: SendCampaignPayload = await req.json();
-    const { campaign_name, template_name, template_language, contacts, headerVideoUrl } = body;
+    const { campaign_name, template_name, template_language, contacts, headerVideoUrl, headerImageUrl, headerMediaUrl } = body;
 
     if (!campaign_name || !template_name || !contacts?.length) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -44,9 +44,10 @@ export async function POST(req: NextRequest) {
       throw new Error("Failed to upsert contacts");
     }
 
-    // Fetch template details from Meta to check for image header & body variables
+    // Fetch template details from Meta to check for header format & body variables
     const wabaId = process.env.META_WABA_ID;
     const accessToken = process.env.META_ACCESS_TOKEN;
+    let hasVideoHeader = false;
     let hasImageHeader = false;
     let hasBodyVariables = false;
 
@@ -70,14 +71,16 @@ export async function POST(req: NextRequest) {
             const headerComponent = matchingTemplate.components.find(
               (c: any) => c.type === "HEADER"
             );
-            if (headerComponent && headerComponent.format === "IMAGE") {
+            if (headerComponent?.format === "VIDEO") {
+              hasVideoHeader = true;
+            } else if (headerComponent?.format === "IMAGE") {
               hasImageHeader = true;
             }
 
             const bodyComponent = matchingTemplate.components.find(
               (c: any) => c.type === "BODY"
             );
-            if (bodyComponent && bodyComponent.text) {
+            if (bodyComponent?.text) {
               hasBodyVariables = /\{\{\d+\}\}/.test(bodyComponent.text);
             }
           }
@@ -92,11 +95,18 @@ export async function POST(req: NextRequest) {
     const failReasons: string[] = [];
 
     for (const contact of upsertedContacts) {
+      let headerMedia: { type: "video" | "image"; url: string } | null = null;
+      if (hasVideoHeader && (headerVideoUrl || headerMediaUrl)) {
+        headerMedia = { type: "video", url: (headerVideoUrl || headerMediaUrl)! };
+      } else if (hasImageHeader && (headerImageUrl || headerMediaUrl)) {
+        headerMedia = { type: "image", url: (headerImageUrl || headerMediaUrl)! };
+      }
+
       const { ok, wamid, error } = await sendWhatsAppTemplate(
         contact.phone,
         template_name,
         template_language,
-        headerVideoUrl,
+        headerMedia,
         contact.name ?? undefined,
         hasBodyVariables
       );

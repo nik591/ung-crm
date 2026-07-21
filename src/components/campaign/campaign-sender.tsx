@@ -15,7 +15,7 @@ const schema = z.object({
   campaign_name: z.string().min(2, "Campaign name required"),
   template_name: z.string().min(1, "Select a template"),
   template_language: z.string().min(1),
-  headerVideoUrl: z.string().trim().optional(),
+  headerMediaUrl: z.string().trim().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -27,6 +27,7 @@ export function CampaignSender() {
   const [step, setStep] = useState<"form" | "preview" | "success">("form");
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
@@ -35,6 +36,7 @@ export function CampaignSender() {
   });
 
   const templateName = watch("template_name");
+  const selectedTemplate = templates.find((t) => t.name === templateName) || null;
 
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
@@ -124,6 +126,31 @@ export function CampaignSender() {
       toast.error("Upload a contacts file first");
       return;
     }
+
+    // Dynamic header media checks
+    const activeTemplate = templates.find((t) => t.name === data.template_name);
+    if (activeTemplate) {
+      const format = activeTemplate.headerFormat;
+      if ((format === "VIDEO" || format === "IMAGE") && !data.headerMediaUrl) {
+        toast.error(`Please upload a header ${format.toLowerCase()} or provide a valid URL`);
+        return;
+      }
+
+      if (format === "VIDEO" && data.headerMediaUrl) {
+        if (!/^https?:\/\/.+\.(mp4|mov|avi|mkv|webm|3gp)(\?.*)?$/i.test(data.headerMediaUrl)) {
+          toast.error("Must be a valid video URL (e.g. ending in .mp4, .mov, .webm)");
+          return;
+        }
+      }
+
+      if (format === "IMAGE" && data.headerMediaUrl) {
+        if (!/^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(data.headerMediaUrl)) {
+          toast.error("Must be a valid image URL (e.g. ending in .jpg, .png, .webp)");
+          return;
+        }
+      }
+    }
+
     if (step === "form") {
       setStep("preview");
       return;
@@ -138,7 +165,8 @@ export function CampaignSender() {
           campaign_name: data.campaign_name,
           template_name: data.template_name,
           template_language: data.template_language,
-          headerVideoUrl: data.headerVideoUrl,
+          headerMediaUrl: data.headerMediaUrl,
+          headerVideoUrl: data.headerMediaUrl, // for fallback compatibility
           contacts,
         }),
       });
@@ -270,15 +298,127 @@ export function CampaignSender() {
                       {errors.template_name && <p className="text-xs text-destructive">{errors.template_name.message}</p>}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-foreground">Header Video URL</label>
-                      <input
-                        {...register("headerVideoUrl")}
-                        placeholder="https://example.com/video.mp4"
-                        className="w-full px-3 py-2.5 bg-background border border-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                      {errors.headerVideoUrl && <p className="text-xs text-destructive">{errors.headerVideoUrl.message}</p>}
-                    </div>
+                    {selectedTemplate && (selectedTemplate.headerFormat === "VIDEO" || selectedTemplate.headerFormat === "IMAGE") && (
+                      <div className="space-y-2 border border-border bg-muted/20 rounded-xl p-4">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                          {selectedTemplate.headerFormat === "VIDEO" ? "Header Video" : "Header Image"}
+                          <span className="text-xs font-normal text-muted-foreground">(Required)</span>
+                        </label>
+                        
+                        <div className="grid grid-cols-1 gap-3">
+                          {/* File Upload Zone */}
+                          <div className="relative">
+                            <label
+                              htmlFor="header-media-file"
+                              className={`flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all ${
+                                uploadingMedia ? "opacity-50 pointer-events-none" : ""
+                              }`}
+                            >
+                              {watch("headerMediaUrl") ? (
+                                <div className="space-y-2 w-full">
+                                  {selectedTemplate.headerFormat === "IMAGE" ? (
+                                    <div className="relative w-32 h-20 mx-auto rounded overflow-hidden border border-border">
+                                      <img
+                                        src={watch("headerMediaUrl")}
+                                        alt="Header preview"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-2 text-primary text-xs font-medium py-2">
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      Video Uploaded Successfully
+                                    </div>
+                                  )}
+                                  <div className="text-xs text-muted-foreground truncate max-w-[280px] mx-auto">
+                                    {watch("headerMediaUrl")}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setValue("headerMediaUrl", "");
+                                    }}
+                                    className="text-xs text-destructive hover:underline font-medium block mx-auto"
+                                  >
+                                    Remove Media
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  {uploadingMedia ? (
+                                    <div className="py-2 flex flex-col items-center gap-2">
+                                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                      <span className="text-xs text-muted-foreground">Uploading media...</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-5 h-5 text-muted-foreground mb-1.5 mx-auto" />
+                                      <p className="text-xs font-medium text-foreground">
+                                        Upload {selectedTemplate.headerFormat.toLowerCase()} file
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                                        {selectedTemplate.headerFormat === "VIDEO" 
+                                          ? "MP4, MOV, WebM (Max 16MB)" 
+                                          : "JPG, PNG, WebP (Max 5MB)"}
+                                      </p>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </label>
+                            <input
+                              id="header-media-file"
+                              type="file"
+                              accept={selectedTemplate.headerFormat === "VIDEO" ? "video/*" : "image/*"}
+                              className="hidden"
+                              disabled={uploadingMedia}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingMedia(true);
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                try {
+                                  const res = await fetch("/api/upload", {
+                                    method: "POST",
+                                    body: formData,
+                                  });
+                                  if (!res.ok) {
+                                    const errData = await res.json().catch(() => ({}));
+                                    throw new Error(errData.error || "Failed to upload file");
+                                  }
+                                  const data = await res.json();
+                                  setValue("headerMediaUrl", data.url);
+                                  toast.success("Header media uploaded successfully!");
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to upload media");
+                                } finally {
+                                  setUploadingMedia(false);
+                                }
+                              }}
+                            />
+                          </div>
+
+                          {/* Or Paste URL */}
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium text-muted-foreground text-center">- OR paste public URL -</p>
+                            <input
+                              {...register("headerMediaUrl")}
+                              placeholder={
+                                selectedTemplate.headerFormat === "VIDEO"
+                                  ? "https://example.com/video.mp4"
+                                  : "https://example.com/image.jpg"
+                              }
+                              className="w-full px-3 py-2 bg-background border border-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            {errors.headerMediaUrl && (
+                              <p className="text-xs text-destructive">{errors.headerMediaUrl.message}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* File Upload */}
                     <div className="space-y-1.5">

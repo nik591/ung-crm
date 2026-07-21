@@ -28,15 +28,26 @@ export async function GET() {
       language: string;
       status: string;
       category: string;
-    }) => ({
-      name: t.name,
-      language: t.language,
-      display_name: t.name
-        .split("_")
-        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" "),
-      category: t.category,
-    }));
+      components?: any[];
+    }) => {
+      const headerComponent = t.components?.find((c: any) => c.type === "HEADER");
+      const headerFormat = headerComponent?.format ?? "NONE";
+
+      const bodyComponent = t.components?.find((c: any) => c.type === "BODY");
+      const hasBodyVariables = bodyComponent?.text ? /\{\{\d+\}\}/.test(bodyComponent.text) : false;
+
+      return {
+        name: t.name,
+        language: t.language,
+        display_name: t.name
+          .split("_")
+          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" "),
+        category: t.category,
+        headerFormat,
+        hasBodyVariables,
+      };
+    });
 
     return NextResponse.json(templates);
   } catch (err) {

@@ -87,6 +87,9 @@ export interface WhatsAppTemplate {
   name: string;
   language: string;
   display_name: string;
+  category?: string;
+  headerFormat?: "VIDEO" | "IMAGE" | "DOCUMENT" | "TEXT" | "NONE";
+  hasBodyVariables?: boolean;
 }
 
 export interface SendCampaignPayload {
@@ -95,6 +98,8 @@ export interface SendCampaignPayload {
   template_language: string;
   contacts: ParsedContact[];
   headerVideoUrl?: string;
+  headerImageUrl?: string;
+  headerMediaUrl?: string;
 }
 
 export interface SendReplyPayload {
